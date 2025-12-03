@@ -60,6 +60,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "audio.h"
 #include "joymapping.h"
 #include "recent.h"
+#include "rom_catalog.h"
+#include "rom_preview.h"
 #include "support.h"
 #include "bootcore.h"
 #include "ide.h"
@@ -203,6 +205,24 @@ enum MENU
 	// MT32-pi
 	MENU_MT32PI_MAIN1,
 	MENU_MT32PI_MAIN2,
+
+	// ROM Browser
+	MENU_ROMS_MAIN1,
+	MENU_ROMS_MAIN2,
+	MENU_ROMS_SETUP1,
+	MENU_ROMS_SETUP2,
+	MENU_ROMS_STATION_SELECT1,
+	MENU_ROMS_STATION_SELECT2,
+	MENU_ROMS_PATH_SELECT1,
+	MENU_ROMS_PATH_SELECT2,
+	MENU_ROMS_PATH_SELECTED,
+	MENU_ROMS_CORE_SELECT1,
+	MENU_ROMS_CORE_SELECT2,
+	MENU_ROMS_CORE_SELECTED,
+	MENU_ROMS_SCANNING,
+	MENU_ROMS_BROWSE1,
+	MENU_ROMS_BROWSE2,
+	MENU_ROMS_LAUNCH,
 };
 
 static uint32_t menustate = MENU_NONE1;
@@ -5038,6 +5058,449 @@ void HandleUI(void)
 		break;
 
 		/******************************************************************/
+		/* ROM Browser menu                                               */
+		/******************************************************************/
+	case MENU_ROMS_MAIN1:
+		{
+			// Initialize ROM catalog if needed
+			if (!g_rom_catalog.initialized) {
+				rom_catalog_init();
+				rom_catalog_load();
+			}
+
+			OsdSetSize(16);
+			helptext_idx = 0;
+			parentstate = menustate;
+
+			m = 0;
+			OsdSetTitle("ROM Browser", 0);
+
+			// Check if any stations are configured
+			int num_stations = rom_station_count();
+
+			OsdWrite(m++);
+
+			if (num_stations == 0) {
+				OsdWrite(m++, "   No game stations configured");
+				OsdWrite(m++);
+				OsdWrite(m++, "   Press Enter to setup");
+				OsdWrite(m++);
+				menumask = 0x03;
+				OsdWrite(m++, "  Setup Game Stations      \x16", menusub == 0);
+			} else {
+				sprintf(s, "   %d station(s) configured", num_stations);
+				OsdWrite(m++, s);
+				sprintf(s, "   %d ROMs in catalog", rom_get_count());
+				OsdWrite(m++, s);
+				OsdWrite(m++);
+
+				menumask = 0x1F;
+				OsdWrite(m++, "  Browse All ROMs          \x16", menusub == 0);
+				OsdWrite(m++, "  Browse by Station        \x16", menusub == 1);
+				OsdWrite(m++, "  Setup/Add Stations       \x16", menusub == 2);
+				OsdWrite(m++, "  Rescan ROMs              \x16", menusub == 3);
+			}
+
+			while (m < OsdGetSize() - 1) OsdWrite(m++);
+			OsdWrite(OsdGetSize() - 1, STD_EXIT, menusub == (num_stations ? 4 : 1));
+
+			menustate = MENU_ROMS_MAIN2;
+		}
+		break;
+
+	case MENU_ROMS_MAIN2:
+		if (menu) {
+			menustate = MENU_NONE1;
+			break;
+		}
+
+		if (select) {
+			int num_stations = rom_station_count();
+
+			if (num_stations == 0) {
+				switch (menusub) {
+				case 0:
+					menustate = MENU_ROMS_SETUP1;
+					menusub = 0;
+					break;
+				case 1:
+					menustate = MENU_NONE1;
+					break;
+				}
+			} else {
+				switch (menusub) {
+				case 0:  // Browse All
+					rom_browse_init(-1);  // -1 = all stations
+					menustate = MENU_ROMS_BROWSE1;
+					menusub = 0;
+					break;
+				case 1:  // Browse by Station
+					menustate = MENU_ROMS_STATION_SELECT1;
+					menusub = 0;
+					break;
+				case 2:  // Setup
+					menustate = MENU_ROMS_SETUP1;
+					menusub = 0;
+					break;
+				case 3:  // Rescan
+					menustate = MENU_ROMS_SCANNING;
+					break;
+				case 4:  // Exit
+					menustate = MENU_NONE1;
+					break;
+				}
+			}
+		}
+		break;
+
+	case MENU_ROMS_SETUP1:
+		{
+			OsdSetSize(16);
+			helptext_idx = 0;
+			parentstate = menustate;
+
+			m = 0;
+			OsdSetTitle("Setup Stations", 0);
+			OsdWrite(m++);
+			OsdWrite(m++, "  Select stations to add:");
+			OsdWrite(m++);
+
+			// Show available station templates
+			static int setup_scroll = 0;
+			int visible_items = OsdGetSize() - 5;
+			menumask = 0;
+
+			for (int i = 0; i < visible_items && (setup_scroll + i) < rom_station_template_count; i++) {
+				const rom_station_template_t *tmpl = &rom_station_templates[setup_scroll + i];
+
+				// Check if already configured
+				int already_configured = 0;
+				for (int j = 0; j < ROM_MAX_STATIONS; j++) {
+					if (g_rom_catalog.stations[j].enabled &&
+					    strcasecmp(g_rom_catalog.stations[j].short_name, tmpl->short_name) == 0) {
+						already_configured = 1;
+						break;
+					}
+				}
+
+				char line[32];
+				snprintf(line, sizeof(line), "  [%c] %-20s",
+				         already_configured ? 'X' : ' ', tmpl->name);
+				line[28] = 0;
+
+				menumask |= (1ULL << i);
+				OsdWrite(m++, line, menusub == i, already_configured);
+			}
+
+			while (m < OsdGetSize() - 2) {
+				OsdWrite(m++);
+			}
+
+			menumask |= (1ULL << visible_items);
+			OsdWrite(m++, "  Done - Start Scanning    \x16", menusub == visible_items);
+			OsdWrite(OsdGetSize() - 1, STD_EXIT, menusub == visible_items + 1);
+			menumask |= (1ULL << (visible_items + 1));
+
+			menustate = MENU_ROMS_SETUP2;
+		}
+		break;
+
+	case MENU_ROMS_SETUP2:
+		{
+			int visible_items = OsdGetSize() - 5;
+
+			if (menu) {
+				menustate = MENU_ROMS_MAIN1;
+				menusub = 0;
+				break;
+			}
+
+			if (select) {
+				if (menusub < visible_items && menusub < rom_station_template_count) {
+					// Toggle station
+					const rom_station_template_t *tmpl = &rom_station_templates[menusub];
+
+					// Check if already configured
+					int found_idx = -1;
+					for (int j = 0; j < ROM_MAX_STATIONS; j++) {
+						if (g_rom_catalog.stations[j].enabled &&
+						    strcasecmp(g_rom_catalog.stations[j].short_name, tmpl->short_name) == 0) {
+							found_idx = j;
+							break;
+						}
+					}
+
+					if (found_idx >= 0) {
+						// Remove station
+						rom_station_remove(found_idx);
+					} else {
+						// Add station - go to path selection
+						// Store the template index for later
+						static int pending_template_idx;
+						pending_template_idx = menusub;
+
+						// For now, use default path
+						char default_path[256];
+						snprintf(default_path, sizeof(default_path), "%s/%s",
+						         GAMES_DIR, tmpl->default_path);
+
+						rom_station_add(tmpl->name, tmpl->short_name,
+						                tmpl->default_path, tmpl->core_name,
+						                tmpl->extensions);
+					}
+					menustate = MENU_ROMS_SETUP1;
+				} else if (menusub == visible_items) {
+					// Done - start scanning
+					if (rom_station_count() > 0) {
+						menustate = MENU_ROMS_SCANNING;
+					} else {
+						InfoMessage("Add at least one station first", 2000);
+						menustate = MENU_ROMS_SETUP1;
+					}
+				} else {
+					// Exit
+					menustate = MENU_ROMS_MAIN1;
+					menusub = 0;
+				}
+			}
+
+			// Handle scrolling with up/down through template list
+			if (up && menusub > 0) {
+				menusub--;
+				menustate = MENU_ROMS_SETUP1;
+			}
+			if (down && menusub < visible_items + 1) {
+				menusub++;
+				menustate = MENU_ROMS_SETUP1;
+			}
+		}
+		break;
+
+	case MENU_ROMS_STATION_SELECT1:
+		{
+			OsdSetSize(16);
+			helptext_idx = 0;
+			parentstate = menustate;
+
+			m = 0;
+			OsdSetTitle("Select Station", 0);
+			OsdWrite(m++);
+
+			int num_stations = rom_station_count();
+			menumask = 0;
+
+			for (int i = 0; i < num_stations && m < OsdGetSize() - 2; i++) {
+				rom_station_t *station = rom_station_get_by_index(i);
+				if (station) {
+					sprintf(s, "  %-18s (%4d)", station->name, station->rom_count);
+					s[28] = 0;
+					menumask |= (1ULL << i);
+					OsdWrite(m++, s, menusub == i);
+				}
+			}
+
+			while (m < OsdGetSize() - 1) OsdWrite(m++);
+			menumask |= (1ULL << num_stations);
+			OsdWrite(OsdGetSize() - 1, STD_EXIT, menusub == num_stations);
+
+			menustate = MENU_ROMS_STATION_SELECT2;
+		}
+		break;
+
+	case MENU_ROMS_STATION_SELECT2:
+		{
+			int num_stations = rom_station_count();
+
+			if (menu) {
+				menustate = MENU_ROMS_MAIN1;
+				menusub = 0;
+				break;
+			}
+
+			if (select) {
+				if (menusub < num_stations) {
+					rom_station_t *station = rom_station_get_by_index(menusub);
+					if (station) {
+						rom_browse_init(station->id);
+						menustate = MENU_ROMS_BROWSE1;
+						menusub = 0;
+					}
+				} else {
+					menustate = MENU_ROMS_MAIN1;
+					menusub = 0;
+				}
+			}
+		}
+		break;
+
+	case MENU_ROMS_SCANNING:
+		{
+			OsdSetSize(16);
+			OsdSetTitle("Scanning ROMs", 0);
+
+			for (int i = 0; i < OsdGetSize(); i++) OsdWrite(i);
+			OsdWrite(6, "      Scanning ROMs...");
+			OsdWrite(8, "      Please wait...");
+			OsdUpdate();
+
+			// Perform the scan
+			int total = rom_scan_all();
+
+			sprintf(s, "    Found %d ROMs", total);
+			OsdWrite(8, s);
+			OsdUpdate();
+			usleep(1500000);  // Show result for 1.5 seconds
+
+			menustate = MENU_ROMS_MAIN1;
+			menusub = 0;
+		}
+		break;
+
+	case MENU_ROMS_BROWSE1:
+		{
+			OsdSetSize(16);
+			helptext_idx = 0;
+			parentstate = menustate;
+
+			int num_roms = rom_browse_available();
+
+			if (num_roms == 0) {
+				OsdSetTitle("ROM Browser", 0);
+				OsdWrite(0);
+				OsdWrite(1, "      No ROMs found");
+				OsdWrite(2);
+				OsdWrite(3, "   Check station setup and");
+				OsdWrite(4, "   rescan to find ROMs.");
+				for (int i = 5; i < OsdGetSize() - 1; i++) OsdWrite(i);
+				menumask = 1;
+				OsdWrite(OsdGetSize() - 1, STD_EXIT, 1);
+				menustate = MENU_ROMS_BROWSE2;
+				break;
+			}
+
+			// Get current selection info for title
+			rom_entry_t *current_rom = rom_get_selected();
+			if (current_rom) {
+				rom_station_t *station = rom_station_get(current_rom->station_id);
+				if (station) {
+					sprintf(s, "ROMs - %s", station->short_name);
+				} else {
+					strcpy(s, "ROM Browser");
+				}
+			} else {
+				strcpy(s, "ROM Browser");
+			}
+			OsdSetTitle(s, 0);
+
+			// Print ROM list
+			rom_browse_print();
+
+			menumask = 0;
+			menustate = MENU_ROMS_BROWSE2;
+		}
+		break;
+
+	case MENU_ROMS_BROWSE2:
+		{
+			int num_roms = rom_browse_available();
+
+			if (menu) {
+				menustate = MENU_ROMS_MAIN1;
+				menusub = 0;
+				break;
+			}
+
+			if (num_roms == 0) {
+				if (select) {
+					menustate = MENU_ROMS_MAIN1;
+					menusub = 0;
+				}
+				break;
+			}
+
+			// Handle navigation
+			if (down) {
+				rom_browse_scan(SCANF_NEXT);
+				menustate = MENU_ROMS_BROWSE1;
+			}
+			if (up) {
+				rom_browse_scan(SCANF_PREV);
+				menustate = MENU_ROMS_BROWSE1;
+			}
+			if (right) {
+				rom_browse_scan(SCANF_NEXT_PAGE);
+				menustate = MENU_ROMS_BROWSE1;
+			}
+			if (left) {
+				rom_browse_scan(SCANF_PREV_PAGE);
+				menustate = MENU_ROMS_BROWSE1;
+			}
+			if (c == KEY_HOME) {
+				rom_browse_scan(SCANF_INIT);
+				menustate = MENU_ROMS_BROWSE1;
+			}
+			if (c == KEY_END) {
+				rom_browse_scan(SCANF_END);
+				menustate = MENU_ROMS_BROWSE1;
+			}
+
+			// Launch ROM on select
+			if (select) {
+				menustate = MENU_ROMS_LAUNCH;
+			}
+
+			// Scroll long names
+			rom_browse_scroll_name();
+		}
+		break;
+
+	case MENU_ROMS_LAUNCH:
+		{
+			char rom_path[1024];
+			char core_path[1024];
+			char label[256];
+
+			if (rom_browse_select(rom_path, core_path, label)) {
+				rom_entry_t *rom = rom_get_selected();
+				rom_station_t *station = rom ? rom_station_get(rom->station_id) : NULL;
+
+				if (station && station->core_path[0]) {
+					// We need to load the core first, then the ROM
+					// Store the ROM path for after core loads
+					strcpy(Selected_F[0], rom_path);
+
+					// Build the core path
+					char core_file[512];
+					snprintf(core_file, sizeof(core_file), "_%s", station->core_path);
+
+					// Load the core
+					OsdSetTitle("Loading...", 0);
+					for (int i = 0; i < OsdGetSize(); i++) OsdWrite(i);
+					sprintf(s, "  Loading %s core...", station->short_name);
+					OsdWrite(6, s);
+					sprintf(s, "  ROM: %.24s", label);
+					OsdWrite(8, s);
+					OsdUpdate();
+
+					// Find and load the core RBF
+					// The system will handle loading the ROM after core init
+					// For now, we'll need to use the existing core loading mechanism
+
+					// This is simplified - full implementation would need to
+					// integrate with the core loading system more deeply
+					InfoMessage("Launch feature requires core integration", 2000);
+					menustate = MENU_ROMS_BROWSE1;
+				} else {
+					InfoMessage("No core configured for this station", 2000);
+					menustate = MENU_ROMS_BROWSE1;
+				}
+			} else {
+				menustate = MENU_ROMS_BROWSE1;
+			}
+		}
+		break;
+
+		/******************************************************************/
 		/* file selection menu                                            */
 		/******************************************************************/
 	case MENU_FILE_SELECT1:
@@ -6472,15 +6935,17 @@ void HandleUI(void)
 		OsdWrite(m++, " Define joystick buttons   \x16", menusub == 2);
 		OsdWrite(m++, " Scripts                   \x16", menusub == 3);
 		OsdWrite(m++, " Help                      \x16", menusub == 4);
+		OsdWrite(m++, " ROMs                      \x16", menusub == 5);
 		OsdWrite(m++, "");
 		cr = m;
-		OsdWrite(m++, " Reboot (hold \x16 cold reboot)", menusub == 5);
+		OsdWrite(m++, " Reboot (hold \x16 cold reboot)", menusub == 6);
 		sysinfo_timer = 0;
 
 		reboot_req = 0;
 
+		menumask = 0xFF;  // Updated for 8 menu items (0-7)
 		while(m < OsdGetSize()-1) OsdWrite(m++, "");
-		OsdWrite(15, STD_EXIT, menusub == 6);
+		OsdWrite(15, STD_EXIT, menusub == 7);
 		menustate = MENU_SYSTEM2;
 		break;
 
@@ -6542,6 +7007,12 @@ void HandleUI(void)
 				break;
 
 			case 5:
+				// ROMs Browser
+				menustate = MENU_ROMS_MAIN1;
+				menusub = 0;
+				break;
+
+			case 6:
 				{
 					reboot_req = 1;
 
@@ -6554,7 +7025,7 @@ void HandleUI(void)
 				}
 				break;
 
-			case 6:
+			case 7:
 				menustate = MENU_NONE1;
 				break;
 			}
@@ -7425,4 +7896,24 @@ void ProgressMessage(const char* title, const char* text, int current, int max)
 
 		InfoMessage(progress_buf, 2000, title);
 	}
+}
+
+/*****************************************************************************
+ * ROM Browser Menu Functions
+ *****************************************************************************/
+
+void menu_roms_open()
+{
+	menustate = MENU_ROMS_MAIN1;
+	menusub = 0;
+	OsdEnable(DISABLE_KEYBOARD);
+}
+
+int menu_roms_configured()
+{
+	if (!g_rom_catalog.initialized) {
+		rom_catalog_init();
+		rom_catalog_load();
+	}
+	return rom_station_count() > 0;
 }
