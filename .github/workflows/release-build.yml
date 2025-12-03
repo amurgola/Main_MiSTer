@@ -1,0 +1,66 @@
+name: Build Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            libncurses-dev \
+            flex \
+            bison \
+            openssl \
+            libssl-dev \
+            dkms \
+            libelf-dev \
+            libudev-dev \
+            libpci-dev \
+            libiberty-dev \
+            autoconf \
+            liblz4-tool \
+            bc \
+            curl \
+            libncurses5-dev \
+            lzop \
+            make \
+            u-boot-tools \
+            libgmp3-dev \
+            libmpc-dev
+
+      - name: Download ARM cross-compiler
+        run: |
+          wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
+          sudo tar xf gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz -C /opt
+          rm gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
+
+      - name: Build MiSTer binary
+        run: |
+          export PATH=/opt/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/bin:$PATH
+          make
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiSTer
+          path: bin/MiSTer
+
+      - name: Upload release asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/MiSTer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
