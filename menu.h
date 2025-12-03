@@ -26,4 +26,8 @@ void StoreIdx_S(int idx, const char *path);
 
 int menu_present();
 
+// ROM Browser functions
+void menu_roms_open();
+int  menu_roms_configured();
+
 #endif
