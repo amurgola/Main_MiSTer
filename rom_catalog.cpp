@@ -22,29 +22,38 @@
 rom_catalog_t g_rom_catalog = {};
 
 // Predefined station templates for common consoles
+// Extensions are space-separated for clarity. The path is relative to /games/
 const rom_station_template_t rom_station_templates[] = {
-    { "Nintendo Entertainment System", "NES",      "NES",       "NES",       "NES" },
-    { "Super Nintendo",                "SNES",     "SNES",      "SNES",      "SFCSMCBINSFC" },
-    { "Sega Genesis / Mega Drive",     "Genesis",  "Genesis",   "Genesis",   "BINGENMD " },
-    { "Sega Master System",            "SMS",      "SMS",       "SMS",       "SMSSG " },
-    { "Game Boy",                      "GB",       "GAMEBOY",   "GAMEBOY",   "GBGBC" },
-    { "Game Boy Advance",              "GBA",      "GBA",       "GBA",       "GBA" },
-    { "Nintendo 64",                   "N64",      "N64",       "N64",       "N64Z64V64" },
-    { "Atari 2600",                    "A2600",    "ATARI2600", "ATARI2600", "A26BIN" },
-    { "Atari 7800",                    "A7800",    "ATARI7800", "ATARI7800", "A78BIN" },
-    { "ColecoVision",                  "Coleco",   "Coleco",    "Coleco",    "COLBIN" },
-    { "TurboGrafx-16 / PC Engine",     "TG16",     "TGFX16",    "TGFX16",    "PCEBIN" },
-    { "Neo Geo",                       "NeoGeo",   "NEOGEO",    "NEOGEO",    "" },
-    { "Arcade",                        "Arcade",   "_Arcade",   "",          "MRA" },
-    { "PlayStation",                   "PSX",      "PSX",       "PSX",       "CUECHD" },
-    { "Sega CD / Mega CD",             "SegaCD",   "MegaCD",    "MegaCD",    "CUECHD" },
-    { "Sega Saturn",                   "Saturn",   "Saturn",    "Saturn",    "CUECHD" },
-    { "Commodore 64",                  "C64",      "C64",       "C64",       "PRGCRTT64" },
-    { "Amiga",                         "Amiga",    "Amiga",     "Minimig",   "ADF" },
-    { "Atari ST",                      "AtariST",  "AtariST",   "AtariST",   "ST " },
-    { "MSX",                           "MSX",      "MSX",       "MSX",       "ROMDSKCAS" },
-    { "ZX Spectrum",                   "Spectrum", "Spectrum",  "Spectrum",  "TAPDSKZ80" },
-    { "Amstrad CPC",                   "CPC",      "Amstrad",   "Amstrad",   "DSKCDTCPR" },
+    { "Nintendo Entertainment System", "NES",      "NES",       "NES",       "nes" },
+    { "Super Nintendo",                "SNES",     "SNES",      "SNES",      "sfc smc bin" },
+    { "Sega Genesis / Mega Drive",     "Genesis",  "Genesis",   "Genesis",   "bin gen md smd" },
+    { "Sega Master System",            "SMS",      "SMS",       "SMS",       "sms sg" },
+    { "Game Boy",                      "GB",       "GameBoy",   "GAMEBOY",   "gb gbc" },
+    { "Game Boy Color",                "GBC",      "GameBoy",   "GAMEBOY",   "gbc gb" },
+    { "Game Boy Advance",              "GBA",      "GBA",       "GBA",       "gba" },
+    { "Nintendo 64",                   "N64",      "N64",       "N64",       "n64 z64 v64" },
+    { "Atari 2600",                    "A2600",    "Atari2600", "ATARI2600", "a26 bin" },
+    { "Atari 7800",                    "A7800",    "Atari7800", "ATARI7800", "a78 bin" },
+    { "Atari 5200",                    "A5200",    "Atari5200", "ATARI5200", "a52 bin car" },
+    { "ColecoVision",                  "Coleco",   "Coleco",    "Coleco",    "col bin rom" },
+    { "TurboGrafx-16 / PC Engine",     "TG16",     "TGFX16",    "TGFX16",    "pce bin sgx" },
+    { "Neo Geo",                       "NeoGeo",   "NEOGEO",    "NEOGEO",    "neo" },
+    { "Arcade",                        "Arcade",   "_Arcade",   "",          "mra" },
+    { "PlayStation 1",                 "PS1",      "PSX",       "PSX",       "cue chd bin iso img pbp" },
+    { "PlayStation",                   "PSX",      "PSX",       "PSX",       "cue chd bin iso img pbp" },
+    { "Sega CD / Mega CD",             "SegaCD",   "MegaCD",    "MegaCD",    "cue chd iso" },
+    { "Sega Saturn",                   "Saturn",   "Saturn",    "Saturn",    "cue chd" },
+    { "Sega 32X",                      "S32X",     "S32X",      "S32X",      "32x bin" },
+    { "Commodore 64",                  "C64",      "C64",       "C64",       "prg crt t64 d64" },
+    { "Amiga",                         "Amiga",    "Amiga",     "Minimig",   "adf hdf" },
+    { "Atari ST",                      "AtariST",  "AtariST",   "AtariST",   "st stx" },
+    { "MSX",                           "MSX",      "MSX",       "MSX",       "rom dsk cas mx1 mx2" },
+    { "ZX Spectrum",                   "Spectrum", "Spectrum",  "Spectrum",  "tap tzx z80 dsk trd" },
+    { "Amstrad CPC",                   "CPC",      "Amstrad",   "Amstrad",   "dsk cdt cpr" },
+    { "Intellivision",                 "Intv",     "Intellivision", "Intellivision", "int bin rom" },
+    { "Vectrex",                       "Vectrex", "Vectrex",    "Vectrex",   "vec bin rom" },
+    { "WonderSwan",                    "WS",       "WonderSwan", "WonderSwan", "ws wsc" },
+    { "Neo Geo Pocket",                "NGP",      "NeoGeo",    "NeoGeo",    "ngp ngc" },
 };
 
 const int rom_station_template_count = sizeof(rom_station_templates) / sizeof(rom_station_templates[0]);
@@ -726,35 +735,36 @@ static int match_extension(const char *filename, const char *extensions)
 
     dot++;  // Skip the dot
 
-    // Extensions are stored as concatenated 3-char codes (e.g., "NESBIN")
+    // Get the file extension (up to 8 characters to handle longer extensions)
     int ext_len = strlen(dot);
-    if (ext_len > 3) ext_len = 3;
+    if (ext_len > 8) ext_len = 8;
 
-    char ext_upper[4];
+    char ext_lower[16];
     for (int i = 0; i < ext_len; i++) {
-        ext_upper[i] = toupper(dot[i]);
+        ext_lower[i] = tolower(dot[i]);
     }
-    ext_upper[ext_len] = 0;
+    ext_lower[ext_len] = 0;
 
-    // Check if extension appears in the extension list
+    // Extensions are space-separated (e.g., "cue chd bin iso")
     const char *p = extensions;
     while (*p) {
-        int match_len = 0;
-        while (p[match_len] && p[match_len] != ' ' && match_len < 3) match_len++;
+        // Skip leading spaces
+        while (*p == ' ') p++;
+        if (!*p) break;
 
-        char cmp[4] = {0};
-        for (int i = 0; i < match_len; i++) {
-            cmp[i] = toupper(p[i]);
-        }
+        // Find end of current extension token
+        const char *start = p;
+        while (*p && *p != ' ') p++;
+        int token_len = p - start;
 
-        if (strcmp(ext_upper, cmp) == 0) return 1;
+        if (token_len > 0 && token_len <= 8) {
+            // Compare case-insensitively
+            char cmp[16] = {0};
+            for (int i = 0; i < token_len; i++) {
+                cmp[i] = tolower(start[i]);
+            }
 
-        p += match_len;
-        if (*p == ' ') p++;
-        else if (match_len == 3) {
-            // No space separator, continue with next 3 chars
-        } else {
-            break;
+            if (strcmp(ext_lower, cmp) == 0) return 1;
         }
     }
 
